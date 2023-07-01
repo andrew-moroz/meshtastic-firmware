@@ -29,10 +29,9 @@ extern meshtastic_LocalConfig config;
 extern meshtastic_LocalModuleConfig moduleConfig;
 extern meshtastic_OEMStore oemStore;
 extern meshtastic_User &owner;
-extern meshtastic_Position localPosition;
 
 /// Given a node, return how many seconds in the past (vs now) that we last heard from it
-uint32_t sinceLastSeen(const meshtastic_NodeInfoLite *n);
+uint32_t sinceLastSeen(const meshtastic_NodeInfo *n);
 
 /// Given a packet, return how many seconds in the past (vs now) it was received
 uint32_t sinceReceived(const meshtastic_MeshPacket *p);
@@ -48,12 +47,9 @@ class NodeDB
     meshtastic_NodeInfo *nodes;
     pb_size_t *numNodes;
 
-    meshtastic_NodeInfoLite *meshNodes;
-    pb_size_t *numMeshNodes;
-
   public:
     bool updateGUI = false; // we think the gui should definitely be redrawn, screen will clear this once handled
-    meshtastic_NodeInfoLite *updateGUIforNode = NULL; // if currently showing this node, we think you should update the GUI
+    meshtastic_NodeInfo *updateGUIforNode = NULL; // if currently showing this node, we think you should update the GUI
     Observable<const meshtastic::NodeStatus *> newStatus;
 
     /// don't do mesh based algoritm for node id assignment (initially)
@@ -94,6 +90,8 @@ class NodeDB
     /// @return our node number
     NodeNum getNodeNum() { return myNodeInfo.my_node_num; }
 
+    size_t getNumNodes() { return *numNodes; }
+
     /// if returns false, that means our node should send a DenyNodeNum response.  If true, we think the number is okay for use
     // bool handleWantNodeNum(NodeNum n);
 
@@ -105,14 +103,26 @@ class NodeDB
     their denial?)
     */
 
+    /// Allow the bluetooth layer to read our next nodeinfo record, or NULL if done reading
+    const meshtastic_NodeInfo *readNextInfo(uint32_t &readIndex);
+
     /// pick a provisional nodenum we hope no one is using
     void pickNewNodeNum();
 
     // get channel channel index we heard a nodeNum on, defaults to 0 if not found
-    uint8_t getMeshNodeChannel(NodeNum n);
+    uint8_t getNodeChannel(NodeNum n);
+
+    /// Find a node in our DB, return null for missing
+    meshtastic_NodeInfo *getNode(NodeNum n);
+
+    meshtastic_NodeInfo *getNodeByIndex(size_t x)
+    {
+        assert(x < *numNodes);
+        return &nodes[x];
+    }
 
     /// Return the number of nodes we've heard from recently (within the last 2 hrs?)
-    size_t getNumOnlineMeshNodes();
+    size_t getNumOnlineNodes();
 
     void initConfigIntervals(), initModuleConfigIntervals(), resetNodes();
 
@@ -123,38 +133,15 @@ class NodeDB
 
     void installRoleDefaults(meshtastic_Config_DeviceConfig_Role role);
 
-    const meshtastic_NodeInfoLite *readNextMeshNode(uint32_t &readIndex);
-
-    meshtastic_NodeInfoLite *getMeshNodeByIndex(size_t x)
-    {
-        assert(x < *numMeshNodes);
-        return &meshNodes[x];
-    }
-
-    meshtastic_NodeInfoLite *getMeshNode(NodeNum n);
-    size_t getNumMeshNodes() { return *numMeshNodes; }
-
   private:
-    /// Find a node in our DB, create an empty NodeInfoLite if missing
-    meshtastic_NodeInfoLite *getOrCreateMeshNode(NodeNum n);
-    void migrateToNodeInfoLite(const meshtastic_NodeInfo *node);
-    /// Find a node in our DB, return null for missing
-    meshtastic_NodeInfo *getNodeInfo(NodeNum n);
-    /// Allow the bluetooth layer to read our next nodeinfo record, or NULL if done reading
-    const meshtastic_NodeInfo *readNextNodeInfo(uint32_t &readIndex);
-    size_t getNumNodes() { return *numNodes; }
-
-    meshtastic_NodeInfo *getNodeByIndex(size_t x)
-    {
-        assert(x < *numNodes);
-        return &nodes[x];
-    }
+    /// Find a node in our DB, create an empty NodeInfo if missing
+    meshtastic_NodeInfo *getOrCreateNode(NodeNum n);
 
     /// Notify observers of changes to the DB
     void notifyObservers(bool forceUpdate = false)
     {
         // Notify observers of the current node state
-        const meshtastic::NodeStatus status = meshtastic::NodeStatus(getNumOnlineMeshNodes(), getNumMeshNodes(), forceUpdate);
+        const meshtastic::NodeStatus status = meshtastic::NodeStatus(getNumOnlineNodes(), getNumNodes(), forceUpdate);
         newStatus.notifyObservers(&status);
     }
 
@@ -229,10 +216,6 @@ inline uint32_t getConfiguredOrDefaultMs(uint32_t configuredInterval, uint32_t d
 /// Sometimes we will have Position objects that only have a time, so check for
 /// valid lat/lon
 static inline bool hasValidPosition(const meshtastic_NodeInfo *n)
-{
-    return n->has_position && (n->position.latitude_i != 0 || n->position.longitude_i != 0);
-}
-static inline bool hasValidPosition(const meshtastic_NodeInfoLite *n)
 {
     return n->has_position && (n->position.latitude_i != 0 || n->position.longitude_i != 0);
 }

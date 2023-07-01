@@ -9,7 +9,6 @@
 #include "NodeDB.h"
 #include "PowerFSM.h"
 #include "RTC.h"
-#include "TypeConversions.h"
 #include "main.h"
 #include "mesh-pb-constants.h"
 #include "modules/NodeInfoModule.h"
@@ -77,8 +76,7 @@ int MeshService::handleFromRadio(const meshtastic_MeshPacket *mp)
     powerFSM.trigger(EVENT_PACKET_FOR_PHONE); // Possibly keep the node from sleeping
 
     nodeDB.updateFrom(*mp); // update our DB state based off sniffing every RX packet from the radio
-    if (mp->which_payload_variant == meshtastic_MeshPacket_decoded_tag && !nodeDB.getMeshNode(mp->from)->has_user &&
-        nodeInfoModule) {
+    if (mp->which_payload_variant == meshtastic_MeshPacket_decoded_tag && !nodeDB.getNode(mp->from)->has_user && nodeInfoModule) {
         LOG_INFO("Heard a node on channel %d we don't know, sending NodeInfo and asking for a response.\n", mp->channel);
         nodeInfoModule->sendOurNodeInfo(mp->from, true, mp->channel);
     }
@@ -238,8 +236,7 @@ void MeshService::sendToMesh(meshtastic_MeshPacket *p, RxSource src, bool ccToPh
 
 void MeshService::sendNetworkPing(NodeNum dest, bool wantReplies)
 {
-    meshtastic_NodeInfoLite *node = nodeDB.getMeshNode(nodeDB.getNodeNum());
-
+    meshtastic_NodeInfo *node = nodeDB.getNode(nodeDB.getNodeNum());
     assert(node);
 
     if (hasValidPosition(node)) {
@@ -269,9 +266,9 @@ void MeshService::sendToPhone(meshtastic_MeshPacket *p)
     fromNum++;
 }
 
-meshtastic_NodeInfoLite *MeshService::refreshLocalMeshNode()
+meshtastic_NodeInfo *MeshService::refreshLocalNodeInfo()
 {
-    meshtastic_NodeInfoLite *node = nodeDB.getMeshNode(nodeDB.getNodeNum());
+    meshtastic_NodeInfo *node = nodeDB.getNode(nodeDB.getNodeNum());
     assert(node);
 
     // We might not have a position yet for our local node, in that case, at least try to send the time
@@ -280,7 +277,7 @@ meshtastic_NodeInfoLite *MeshService::refreshLocalMeshNode()
         node->has_position = true;
     }
 
-    meshtastic_PositionLite &position = node->position;
+    meshtastic_Position &position = node->position;
 
     // Update our local node info with our time (even if we don't decide to update anyone else)
     node->last_heard =
@@ -296,7 +293,7 @@ meshtastic_NodeInfoLite *MeshService::refreshLocalMeshNode()
 int MeshService::onGPSChanged(const meshtastic::GPSStatus *newStatus)
 {
     // Update our local node info with our position (even if we don't decide to update anyone else)
-    meshtastic_NodeInfoLite *node = refreshLocalMeshNode();
+    meshtastic_NodeInfo *node = refreshLocalNodeInfo();
     meshtastic_Position pos = meshtastic_Position_init_default;
 
     if (newStatus->getHasLock()) {
@@ -310,12 +307,12 @@ int MeshService::onGPSChanged(const meshtastic::GPSStatus *newStatus)
 #endif
         if (config.position.fixed_position) {
             LOG_WARN("Using fixed position\n");
-            pos = ConvertToPosition(node->position);
+            pos = node->position;
         }
     }
 
     // Finally add a fresh timestamp and battery level reading
-    // I KNOW this is redundant with refreshLocalMeshNode() above, but these are
+    // I KNOW this is redundant with refreshLocalNodeInfo() above, but these are
     //   inexpensive nonblocking calls and can be refactored in due course
     pos.time = getValidTime(RTCQualityGPS);
 

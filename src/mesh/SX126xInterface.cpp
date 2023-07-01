@@ -14,6 +14,8 @@ SX126xInterface<T>::SX126xInterface(LockingArduinoHal *hal, RADIOLIB_PIN_TYPE cs
     : RadioLibInterface(hal, cs, irq, rst, busy, &lora), lora(&module)
 {
     LOG_WARN("SX126xInterface(cs=%d, irq=%d, rst=%d, busy=%d)\n", cs, irq, rst, busy);
+    LOG_INFO("value of SX126X_MAX_POWER: %d", SX126X_MAX_POWER);
+    LOG_INFO("value of power: %d", power);
 }
 
 /// Initialise the Driver transport hardware and software.
@@ -21,6 +23,61 @@ SX126xInterface<T>::SX126xInterface(LockingArduinoHal *hal, RADIOLIB_PIN_TYPE cs
 /// \return true if initialisation succeeded.
 template <typename T> bool SX126xInterface<T>::init()
 {
+    // #ifdef _SEEED_XIAO_NRF52840_H_
+    // pinMode(SX126X_TXEN, OUTPUT);
+    // digitalWrite(SX126X_TXEN, LOW);
+
+    // pinMode(SX126X_RXEN, OUTPUT);
+    // digitalWrite(SX126X_RXEN, LOW);
+
+    // pinMode(D4, OUTPUT);
+    // digitalWrite(D4, LOW);
+
+    // pinMode(D5, OUTPUT);
+    // digitalWrite(D5, LOW);
+
+    // pinMode(D6, OUTPUT);
+    // digitalWrite(D6, LOW);
+
+    // pinMode(D7, OUTPUT);
+    // digitalWrite(D7, LOW);
+    // #endif
+
+    
+    uint8_t d0 = digitalRead(D0);
+    uint8_t d1 = digitalRead(D1);
+    uint8_t d2 = digitalRead(D2);
+    uint8_t d3 = digitalRead(D3);
+    uint8_t d4 = digitalRead(D4);
+    uint8_t d5 = digitalRead(D5);
+    uint8_t d6 = digitalRead(D6);
+    uint8_t d7 = digitalRead(D7);
+    uint8_t d8 = digitalRead(D8);
+    uint8_t d9 = digitalRead(D9);
+    uint8_t d10 = digitalRead(D10);
+
+    LOG_DEBUG("\n\n\n-------");
+    LOG_DEBUG("\nDIO logic states at BEGINNING of init (after setting TXEN and RXEN low):");
+
+    LOG_DEBUG("\nD0: %d", d0);
+    LOG_DEBUG("\nD1: %d", d1);
+    LOG_DEBUG("\nD2: %d", d2);
+    LOG_DEBUG("\nD3: %d", d3);
+    LOG_DEBUG("\nD4: %d", d4);
+    LOG_DEBUG("\nD5: %d", d5);
+    LOG_DEBUG("\nD6: %d", d6);
+    LOG_DEBUG("\nD7: %d", d7);
+    LOG_DEBUG("\nD8: %d", d8);
+    LOG_DEBUG("\nD9: %d", d9);
+    LOG_DEBUG("\nD10: %d", d10);
+
+    LOG_DEBUG("\n\n\n-------");
+
+    // LOG_DEBUG("\n\n\n-------");
+    // LOG_DEBUG("\nTXEN state at beginning of init: %d", txEnState);
+    // LOG_DEBUG("\nRXEN state at beginning of init: %d", rxEnState);
+    // LOG_DEBUG("\n\n\n-------");
+
 #ifdef SX126X_POWER_EN
     digitalWrite(SX126X_POWER_EN, HIGH);
     pinMode(SX126X_POWER_EN, OUTPUT);
@@ -37,12 +94,17 @@ template <typename T> bool SX126xInterface<T>::init()
     RadioLibInterface::init();
 
     if (power == 0)
+        LOG_INFO("power == 0; setting power = SX126X_MAX_POWER (%d)", SX126X_MAX_POWER);
         power = SX126X_MAX_POWER;
 
     if (power > SX126X_MAX_POWER) // This chip has lower power limits than some
+        LOG_INFO("power > SX126X_MAX_POWER (%d); setting power = SX126X_MAX_POWER", SX126X_MAX_POWER);
         power = SX126X_MAX_POWER;
 
+    LOG_INFO("\n\npower before call to limitPower(): %d", power);
     limitPower();
+    LOG_INFO("\n\npower after call to limitPower(): %d", power);
+    LOG_INFO("\n\n");
 
     int res = lora.begin(getFreq(), bw, sf, cr, syncWord, power, preambleLength, tcxoVoltage, useRegulatorLDO);
     // \todo Display actual typename of the adapter, not just `SX126x`
@@ -60,14 +122,48 @@ template <typename T> bool SX126xInterface<T>::init()
     LOG_DEBUG("Current limit set to %f\n", currentLimit);
     LOG_DEBUG("Current limit set result %d\n", res);
 
+
+    // NOTE: Guessing the heat issue may be related to the fact that both TXEN and RXEN *high*, both at the top of init and the end
+    // Still need to do some more logging to figure out what's going on
+
 #if defined(SX126X_E22)
     // E22 Emulation explicitly requires DIO2 as RF switch, so set it to TRUE again for good measure. In case somebody defines
     // SX126X_TX for an E22 Module
     if (res == RADIOLIB_ERR_NONE) {
         LOG_DEBUG("SX126X_E22 mode enabled. Setting DIO2 as RF Switch\n");
         res = lora.setDio2AsRfSwitch(true);
+        LOG_DEBUG("lora.setDio2AsRfSwitch result: %d", res);
     }
 #endif
+
+// d0 = digitalRead(D0);
+// d1 = digitalRead(D1);
+// d2 = digitalRead(D2);
+// d3 = digitalRead(D3);
+// d4 = digitalRead(D4);
+// d5 = digitalRead(D5);
+// d6 = digitalRead(D6);
+// d7 = digitalRead(D7);
+// d8 = digitalRead(D8);
+// d9 = digitalRead(D9);
+// d10 = digitalRead(D10);
+
+// LOG_DEBUG("\n\n\n-------");
+// LOG_DEBUG("\nDIO logic states BETWEEN setDio2AsRfSwitch blocks:");
+
+// LOG_DEBUG("\nD0: %d", d0);
+// LOG_DEBUG("\nD1: %d", d1);
+// LOG_DEBUG("\nD2: %d", d2);
+// LOG_DEBUG("\nD3: %d", d3);
+// LOG_DEBUG("\nD4: %d", d4);
+// LOG_DEBUG("\nD5: %d", d5);
+// LOG_DEBUG("\nD6: %d", d6);
+// LOG_DEBUG("\nD7: %d", d7);
+// LOG_DEBUG("\nD8: %d", d8);
+// LOG_DEBUG("\nD9: %d", d9);
+// LOG_DEBUG("\nD10: %d", d10);
+
+// LOG_DEBUG("\n\n\n-------");
 
 #if defined(SX126X_TXEN) && (SX126X_TXEN != RADIOLIB_NC)
     // lora.begin sets Dio2 as RF switch control, which is not true if we are manually controlling RX and TX
@@ -109,6 +205,36 @@ template <typename T> bool SX126xInterface<T>::init()
         RECORD_CRITICALERROR(CriticalErrorCode_SX1262Failure);
     // If we got this far register accesses (and therefore SPI comms) are good
 #endif
+
+
+    d0 = digitalRead(D0);
+    d1 = digitalRead(D1);
+    d2 = digitalRead(D2);
+    d3 = digitalRead(D3);
+    d4 = digitalRead(D4);
+    d5 = digitalRead(D5);
+    d6 = digitalRead(D6);
+    d7 = digitalRead(D7);
+    d8 = digitalRead(D8);
+    d9 = digitalRead(D9);
+    d10 = digitalRead(D10);
+
+    LOG_DEBUG("\n\n\n-------");
+    LOG_DEBUG("\nDIO logic states at END of init:");
+
+    LOG_DEBUG("\nD0: %d", d0);
+    LOG_DEBUG("\nD1: %d", d1);
+    LOG_DEBUG("\nD2: %d", d2);
+    LOG_DEBUG("\nD3: %d", d3);
+    LOG_DEBUG("\nD4: %d", d4);
+    LOG_DEBUG("\nD5: %d", d5);
+    LOG_DEBUG("\nD6: %d", d6);
+    LOG_DEBUG("\nD7: %d", d7);
+    LOG_DEBUG("\nD8: %d", d8);
+    LOG_DEBUG("\nD9: %d", d9);
+    LOG_DEBUG("\nD10: %d", d10);
+
+    LOG_DEBUG("\n\n\n-------");
 
     if (res == RADIOLIB_ERR_NONE)
         res = lora.setCRC(RADIOLIB_SX126X_LORA_CRC_ON);

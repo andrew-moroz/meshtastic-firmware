@@ -5,7 +5,6 @@
 #include "NodeDB.h"
 #include "PowerFSM.h"
 #include "RadioInterface.h"
-#include "TypeConversions.h"
 #include "configuration.h"
 #include "main.h"
 #include "xmodem.h"
@@ -41,7 +40,7 @@ void PhoneAPI::handleStartConfig()
     state = STATE_SEND_MY_INFO;
 
     LOG_INFO("Starting API client config\n");
-    nodeInfoForPhone.num = 0; // Don't keep returning old nodeinfos
+    nodeInfoForPhone = NULL; // Don't keep returning old nodeinfos
     resetReadIndex();
 }
 
@@ -148,19 +147,20 @@ size_t PhoneAPI::getFromRadio(uint8_t *buf)
         fromRadioScratch.my_info = myNodeInfo;
         state = STATE_SEND_NODEINFO;
 
-        service.refreshLocalMeshNode(); // Update my NodeInfo because the client will be asking for it soon.
+        service.refreshLocalNodeInfo(); // Update my NodeInfo because the client will be asking for it soon.
         break;
 
     case STATE_SEND_NODEINFO: {
         LOG_INFO("getFromRadio=STATE_SEND_NODEINFO\n");
+        const meshtastic_NodeInfo *info = nodeInfoForPhone;
+        nodeInfoForPhone = NULL; // We just consumed a nodeinfo, will need a new one next time
 
-        if (nodeInfoForPhone.num != 0) {
-            LOG_INFO("nodeinfo: num=0x%x, lastseen=%u, id=%s, name=%s\n", nodeInfoForPhone.num, nodeInfoForPhone.last_heard,
-                     nodeInfoForPhone.user.id, nodeInfoForPhone.user.long_name);
+        if (info) {
+            LOG_INFO("Sending nodeinfo: num=0x%x, lastseen=%u, id=%s, name=%s\n", info->num, info->last_heard, info->user.id,
+                     info->user.long_name);
             fromRadioScratch.which_payload_variant = meshtastic_FromRadio_node_info_tag;
-            fromRadioScratch.node_info = nodeInfoForPhone;
+            fromRadioScratch.node_info = *info;
             // Stay in current state until done sending nodeinfos
-            nodeInfoForPhone.num = 0; // We just consumed a nodeinfo, will need a new one next time
         } else {
             LOG_INFO("Done sending nodeinfos\n");
             state = STATE_SEND_CHANNELS;
@@ -370,12 +370,8 @@ bool PhoneAPI::available()
         return true;
 
     case STATE_SEND_NODEINFO:
-        if (nodeInfoForPhone.num == 0) {
-            auto nextNode = nodeDB.readNextMeshNode(readIndex);
-            if (nextNode) {
-                nodeInfoForPhone = ConvertToNodeInfo(nextNode);
-            }
-        }
+        if (!nodeInfoForPhone)
+            nodeInfoForPhone = nodeDB.readNextInfo(readIndex);
         return true; // Always say we have something, because we might need to advance our state machine
 
     case STATE_SEND_PACKETS: {

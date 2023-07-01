@@ -19,7 +19,6 @@
 #include "detect/ScanI2CTwoWire.h"
 #include "detect/axpDebug.h"
 #include "detect/einkScan.h"
-#include "graphics/RAKled.h"
 #include "graphics/Screen.h"
 #include "main.h"
 #include "mesh/generated/meshtastic/config.pb.h"
@@ -210,6 +209,24 @@ void setup()
     digitalWrite(PIN_EINK_PWR_ON, HIGH);
 #endif
 
+#if defined(_SEEED_XIAO_NRF52840_H_)
+
+pinMode(CHARGE_LED, INPUT);  // sets to detetct if charge LED is on or off to see if USB is plugged in
+
+pinMode(HICHG, OUTPUT);
+digitalWrite(HICHG, LOW);  // 100 mA charging current if set to LOW and 50mA (actually about 20mA) if set to HIGH
+
+pinMode(BAT_READ, OUTPUT);
+digitalWrite(BAT_READ, LOW); // This is pin P0_14 = 14 and by pullling low to GND it provices path to read on pin 32 (P0,31) PIN_VBAT the voltage from divider on XIAO board
+
+int8_t highChargeValue = digitalRead(HICHG);
+LOG_WARN("\n\ndigitalRead(HICHG): %d\n\n", highChargeValue);
+
+int8_t chargeLedValue = digitalRead(CHARGE_LED);
+LOG_WARN("\n\ndigitalRead(CHARGE_LED): %d\n\n", chargeLedValue);
+
+#endif
+
 #ifdef VEXT_ENABLE
     pinMode(VEXT_ENABLE, OUTPUT);
     digitalWrite(VEXT_ENABLE, 0); // turn on the display power
@@ -238,6 +255,8 @@ void setup()
     OSThread::setup();
 
     ledPeriodic = new Periodic("Blink", ledBlinker);
+
+    LOG_INFO("\n\npowerStatus->getIsCharging: %d \n\n", powerStatus->getIsCharging());
 
     fsInit();
 
@@ -360,15 +379,6 @@ void setup()
 
     // Only one supported RGB LED currently
     rgb_found = i2cScanner->find(ScanI2C::DeviceType::NCP5623);
-
-// Start the RGB LED at 50%
-#ifdef RAK4630
-    if (rgb_found.type == ScanI2C::NCP5623) {
-        rgb.begin();
-        rgb.setCurrent(10);
-        rgb.setColor(128, 128, 128);
-    }
-#endif
 
 #if !defined(ARCH_PORTDUINO) && !defined(ARCH_STM32WL)
     auto acc_info = i2cScanner->firstAccelerometer();
